@@ -1,3 +1,4 @@
+"""Element-wise fuzzy logic operators for tensorflow."""
 from warnings import warn
 import tensorflow as tf
 
@@ -5,8 +6,8 @@ import tensorflow as tf
 Element-wise fuzzy logic operators for tensorflow.
 Supports traditional NumPy/Tensorflow broadcasting.
 
-To use in LTN formulas (broadcasting w.r.t. ltn variables appearing in a formula), 
-wrap the operator with `ltn.WrapperConnective` or `ltn.WrapperQuantifier`. 
+To use in LTN formulas (broadcasting w.r.t. ltn variables appearing in a formula),
+wrap the operator with `ltn.WrapperConnective` or `ltn.WrapperQuantifier`.
 """
 
 eps = 1e-4
@@ -32,7 +33,7 @@ class And_Min:
 class And_Prod:
     def __init__(self,stable=True):
         self.stable = stable
-    
+
     def __call__(self,x,y,stable=None):
         stable = self.stable if stable is None else stable
         if stable:
@@ -53,7 +54,7 @@ class Or_Max:
 class Or_ProbSum:
     def __init__(self,stable=True):
         self.stable = stable
-    
+
     def __call__(self,x,y,stable=None):
         stable = self.stable if stable is None else stable
         if stable:
@@ -79,7 +80,7 @@ class Implies_Godel:
 class Implies_Reichenbach:
     def __init__(self,stable=True):
         self.stable = stable
-    
+
     def __call__(self,x,y,stable=None):
         stable = self.stable if stable is None else stable
         if stable:
@@ -90,7 +91,7 @@ class Implies_Reichenbach:
 class Implies_Goguen:
     def __init__(self,stable=True):
         self.stable = stable
-    
+
     def __call__(self,x,y,stable=None):
         stable = self.stable if stable is None else stable
         if stable:
@@ -108,7 +109,7 @@ class Equiv:
     def __init__(self, and_op, implies_op):
         self.and_op = and_op
         self.implies_op = implies_op
-    
+
     def __call__(self, x, y):
         return self.and_op(self.implies_op(x,y), self.implies_op(y,x))
 
@@ -132,9 +133,9 @@ class Aggreg_pMean:
     def __init__(self,p=2,stable=True):
         self.p = p
         self.stable = stable
-    
+
     def __call__(self,xs,axis=None,keepdims=False,p=None,stable=None):
-        p = self.p if p is None else p 
+        p = self.p if p is None else p
         stable = self.stable if stable is None else stable
         if stable:
             xs = not_zeros(xs)
@@ -145,7 +146,7 @@ class Aggreg_pMeanError:
     def __init__(self,p=2,stable=True):
         self.p = p
         self.stable = stable
-    
+
     def __call__(self,xs,axis=None,keepdims=False,p=None,stable=None):
         p = self.p if p is None else p
         stable = self.stable if stable is None else stable
@@ -157,7 +158,7 @@ class Aggreg_pMeanError:
 class Aggreg_Prod:
     def __call__(self,xs,axis=None,keepdims=False):
         return tf.reduce_prod(xs,axis=axis,keepdims=keepdims)
-    
+
 
 class Aggreg_LogProd:
     def __init__(self,stable=True):
@@ -171,6 +172,6 @@ class Aggreg_LogProd:
         if stable:
             xs=not_zeros(xs)
         return tf.reduce_sum(tf.math.log(xs),axis=axis,keepdims=keepdims)
-    
-    
+
+
 Aggreg_SumLog = Aggreg_LogProd

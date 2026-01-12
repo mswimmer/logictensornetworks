@@ -2,9 +2,12 @@ from __future__ import annotations
 from typing import Optional, Union, List, Callable, Any
 import warnings
 
-import numpy as np
+# import numpy as np
 import tensorflow as tf
-from tensorflow.keras import layers
+# import tensorflow.keras as keras
+import keras
+# from tensorflow.keras import layers
+from keras import layers
 
 VarLabel = str
 FloatTensorLike = tf.types.experimental.TensorLike # to update when tf supports better type annotations
@@ -20,7 +23,7 @@ class Expression:
     def _copy(self) -> Expression:
         """Copy the expression but point to the same tensor, for gradient tracking."""
         return Expression(self.tensor, self.free_vars.copy())
-    
+
     def _get_axis_of_free_var(self, free_var: VarLabel) -> int:
         if free_var not in self.free_vars:
             raise ValueError("%s is not a free variable occurring in the expression."%free_var)
@@ -41,7 +44,7 @@ class Expression:
         result.tensor = tf.gather(self.tensor, indices, axis=self._get_axis_of_free_var(free_var))
         result.free_vars = remaining_free_vars
         return result
-        
+
 class Term(Expression):
     def __init__(self, tensor: tf.Tensor, free_vars: List[VarLabel]) -> None:
         super().__init__(tensor, free_vars=free_vars)
@@ -119,8 +122,8 @@ class Proposition(Formula):
             raise ValueError("The truth value of a proposition should be a float in [0,1].")
         self._trainable = trainable
         if self._trainable:
-            tensor = tf.Variable(truth_value, 
-                    trainable=True, 
+            tensor = tf.Variable(truth_value,
+                    trainable=True,
                     constraint=lambda x: tf.clip_by_value(x, 0., 1.),
                     dtype=tf.float32)
         else:
@@ -132,7 +135,7 @@ class Proposition(Formula):
         return f"ltn.{self.__class__.__name__}(tensor={self.tensor}, trainable={self._trainable}, free_vars={self.free_vars})"
 
 def _flatten_free_dims(
-        exprs: List[Expression], 
+        exprs: List[Expression],
         in_place: bool = False
     ) -> List[Expression]:
     if not in_place:
@@ -144,10 +147,10 @@ def _flatten_free_dims(
     return exprs
 
 class _Model:
-    def __init__(self, model: tf.keras.Model, with_feature_dims: bool) -> None:
-        self.model: tf.keras.Model = model
+    def __init__(self, model: keras.Model, with_feature_dims: bool) -> None:
+        self.model: keras.Model = model
         self.with_feature_dims: bool = with_feature_dims
-    
+
     def __call__(self, inputs: Union[Term, List[Term]], *args: Any, **kwargs: Any) -> Expression:
         if not isinstance(inputs,(list,tuple)):
             inputs = [inputs]
@@ -171,11 +174,11 @@ class _Model:
         if not self.model.trainable_variables:
             warnings.warn("The 'trainable_variables' attribute returned an empty list. Make sure that "\
                     "the weights of the layers in the %s instance have been initialized, "\
-                    "for example by calling the model a first time." % tf.keras.Model)
+                    "for example by calling the model a first time." % keras.Model)
         return self.model.trainable_variables
 
 class Predicate(_Model):
-    def __init__(self, model: tf.keras.Model) -> None:
+    def __init__(self, model: keras.Model) -> None:
         super().__init__(model, with_feature_dims=False)
 
     def __call__(self, inputs: Union[Term, List[Term]], *args: Any, **kwargs: Any) -> Formula:
@@ -193,33 +196,33 @@ class Predicate(_Model):
         return wff
 
     @classmethod
-    def FromLogits(cls, logits_model: tf.keras.Model, activation_function: str, 
+    def FromLogits(cls, logits_model: keras.Model, activation_function: str,
             with_class_indexing=True, **kwargs: Any) -> Predicate:
         r"""Constructor from a model that outputs logits.
 
-        A model for a predicate `P` classifying individuals `x` into n classes 
+        A model for a predicate `P` classifying individuals `x` into n classes
         `class_1`, ..., `class_n` will likely output n logits using the same
         hidden layers.
 
-        This constructor allows to easily define a predicate that can be called 
+        This constructor allows to easily define a predicate that can be called
         using the syntax `P([x,class_i])`.
 
-        Given `logits_model`, the model that outputs logits for `x`, the predicate will:  
+        Given `logits_model`, the model that outputs logits for `x`, the predicate will:
         1. Transform the logits into values in [0,1] using either a sigmoid of softmax activation,
         2. Return the value at the index `class_i` (if `with_class_indexing` is True).
 
-        An important requirement of `logits_model` is that it must receive 
+        An important requirement of `logits_model` is that it must receive
         a list of inputs in argument. That is, `logits_model([x])` must work,
         instead of `logits_model(x)`. This is how the predicate will call it,
         even if there is a single argument.
-        
+
         Args:
-            logits_model (tf.keras.Model): Model that outputs logits. 
-                Is called using a list of inputs (`logits_model([x1,x2,...])`), even if 
-                there is a single input (`logits_model([x])`). 
-            activation_function (str): "sigmoid" or "softmax". For softmax activations, 
+            logits_model (keras.Model): Model that outputs logits.
+                Is called using a list of inputs (`logits_model([x1,x2,...])`), even if
+                there is a single input (`logits_model([x])`).
+            activation_function (str): "sigmoid" or "softmax". For softmax activations,
                 `with_class_indexing` is considered True.
-            with_class_indexing (bool, optional): In the case of a sigmoid activation, 
+            with_class_indexing (bool, optional): In the case of a sigmoid activation,
                 whether the predicate should support the syntax `P([x,class_i])` (when True),
                 or the syntax `P([x])` (when False). Defaults to True.
 
@@ -239,16 +242,16 @@ class Predicate(_Model):
         return predicate
 
     @classmethod
-    def MLP(cls: Predicate, 
+    def MLP(cls: Predicate,
             input_shapes,
             hidden_layer_sizes=(16,16)) -> Predicate:
-        inputs = [tf.keras.Input(shape) for shape in input_shapes]
+        inputs = [keras.Input(shape) for shape in input_shapes]
         flat_inputs = [layers.Flatten()(x) for x in inputs]
         hidden = layers.Concatenate()(flat_inputs) if len(flat_inputs) > 1 else flat_inputs[0]
         for units in hidden_layer_sizes:
             hidden = layers.Dense(units,activation=tf.nn.elu)(hidden)
         outputs = layers.Dense(1, activation=tf.nn.sigmoid)(hidden)
-        model = tf.keras.Model(inputs=inputs, outputs=outputs)
+        model = keras.Model(inputs=inputs, outputs=outputs)
         return cls(model)
 
     @classmethod
@@ -258,7 +261,7 @@ class Predicate(_Model):
 
 
 class Function(_Model):
-    def __init__(self, model: tf.keras.Model) -> None:
+    def __init__(self, model: keras.Model) -> None:
         super().__init__(model, with_feature_dims=True)
 
     def __call__(self, inputs: Union[Term, List[Term]], *args: Any, **kwargs: Any) -> Term:
@@ -276,19 +279,19 @@ class Function(_Model):
         return term
 
     @classmethod
-    def MLP(cls: Function, 
-            input_shapes, 
-            output_shape, 
+    def MLP(cls: Function,
+            input_shapes,
+            output_shape,
             hidden_layer_sizes = (16,16)) -> Function:
-        inputs = [tf.keras.Input(shape) for shape in input_shapes]
+        inputs = [keras.Input(shape) for shape in input_shapes]
         flat_inputs = [layers.Flatten()(x) for x in inputs]
         hidden = layers.Concatenate()(flat_inputs) if len(flat_inputs) > 1 else flat_inputs[0]
         for units in hidden_layer_sizes:
-            hidden = layers.Dense(units,activation=tf.nn.elu)(hidden)
-        output_nodes = tf.math.reduce_prod(output_shape)
-        flat_outputs = layers.Dense(output_nodes)(hidden)
+            hidden = layers.Dense(units=units,activation=tf.nn.elu)(hidden)
+        output_nodes: tf.Tensor = tf.math.reduce_prod(output_shape)
+        flat_outputs = layers.Dense(units=int(output_nodes.numpy()))(hidden)
         outputs = layers.Reshape(output_shape)(flat_outputs)
-        model = tf.keras.Model(inputs=inputs, outputs=outputs)
+        model = keras.Model(inputs=inputs, outputs=outputs)
         return cls(model)
 
     @classmethod
@@ -296,12 +299,12 @@ class Function(_Model):
         model = tf_LambdaModel(lambda_operator)
         return cls(model)
 
-class tf_LambdaModel(tf.keras.Model):
-    """ Simple `tf.keras.Model` that implements a lambda layer."""
+class tf_LambdaModel(keras.Model):
+    """ Simple `keras.Model` that implements a lambda layer."""
     def __init__(self, lambda_operator: Callable) -> None:
         super(tf_LambdaModel, self).__init__()
         self.lambda_layer = layers.Lambda(lambda_operator)
-    
+
     def call(self, inputs: Union[tf.Tensor, List[tf.Tensor]]) -> tf.Tensor:
         return self.lambda_layer(inputs)
 
@@ -317,7 +320,7 @@ def diag(*variables: Variable) -> List[Variable]:
 
 def undiag(*variables: Variable) -> List[Variable]:
     for var in variables:
-        var.free_vars = [var.label] if var.locked_diag_label else [var.label] 
+        var.free_vars = [var.label] if var.locked_diag_label else [var.label]
     return variables
 
 def diag_lock(*variables: Variable) -> List[Variable]:
@@ -335,7 +338,7 @@ def as_tensors(expressions: List[Expression]) -> List[tf.Tensor]:
     return [expr.tensor for expr in expressions]
 
 def broadcast_exprs(
-        exprs: List[Expression], 
+        exprs: List[Expression],
         in_place: bool = False
     ) -> List[Expression]:
     # measure dimensions for each free variable
@@ -388,7 +391,7 @@ class Wrapper_Quantifier:
             raise ValueError("The semantics for the quantifier should be \"forall\" or \"exists\".")
         self.semantics = semantics
 
-    def __call__(self, 
+    def __call__(self,
             variables: Union[List[Variable],Variable],
             wff: Formula,
             mask: Optional[Formula] = None,
@@ -406,9 +409,9 @@ class Wrapper_Quantifier:
             if not isinstance(mask, Formula):
                 raise TypeError("The mask argument should be an instance of %s. "\
                         "Got an instance of %s instead." % (Formula, type(mask)))
-            mask = transpose_free_vars(mask, 
+            mask = transpose_free_vars(mask,
                     new_var_order = [var for var in mask.free_vars if var not in aggreg_vars]   # important to put aggreg dims last,
-                            + [var for var in mask.free_vars if var in aggreg_vars])            # to keep other dims in the ragged result 
+                            + [var for var in mask.free_vars if var in aggreg_vars])            # to keep other dims in the ragged result
             wff = broadcast_wff_and_mask(wff, mask)
             mask.tensor = tf.cast(mask.tensor, tf.bool)
             t_ragged_wff = tf.ragged.boolean_mask(wff.tensor, mask.tensor)
@@ -416,12 +419,12 @@ class Wrapper_Quantifier:
             t_result = self.aggreg_op(t_ragged_wff, axis=aggreg_axes, **kwargs)
             if isinstance(t_result, tf.RaggedTensor):
                 t_result = t_result.to_tensor()
-            
-            aggreg_axes_in_mask = [mask.free_vars.index(var) for var in aggreg_vars 
+
+            aggreg_axes_in_mask = [mask.free_vars.index(var) for var in aggreg_vars
                     if var in mask.free_vars]
             non_empty_vars = tf.reduce_sum(tf.cast(mask.tensor,tf.int32), axis=aggreg_axes_in_mask) != 0
             empty_semantics = 1. if self.semantics == "forall" else 0
-            
+
             t_result = tf.where(
                 non_empty_vars,
                 t_result,
@@ -448,7 +451,7 @@ class Wrapper_Formula_Aggregator:
         return result
 
 def broadcast_wff_and_mask(
-        wff: Formula, 
+        wff: Formula,
         mask: Formula
         ) -> Formula:
     """Broadcast the wff to include all vars in mask; put the vars of the mask in the first axes"""
@@ -466,7 +469,7 @@ def broadcast_wff_and_mask(
     return wff
 
 def transpose_free_vars(
-        expr: Expression, 
+        expr: Expression,
         new_var_order: List[VarLabel],
         in_place: bool = False
     ) -> Expression:
@@ -478,8 +481,8 @@ def transpose_free_vars(
     return expr
 
 
-class _SigmoidTfModel(tf.keras.Model):
-    def __init__(self, logits_model: tf.keras.Model, with_class_indexing: bool = False, **kwargs: Any) -> None:
+class _SigmoidTfModel(keras.Model):
+    def __init__(self, logits_model: keras.Model, with_class_indexing: bool = False, **kwargs: Any) -> None:
         """ with_class_indexing: If true, must have last axis (-1) for indexing classes.
         logits_model : must accept list of inputs
          """
@@ -489,7 +492,7 @@ class _SigmoidTfModel(tf.keras.Model):
 
     def _call_without_class_indexing(self, inputs: List[tf.Tensor], *args: Any, **kwargs: Any) -> tf.Tensor:
         logit = self.logits_model(inputs)
-        truth_degree = tf.math.sigmoid(logit)    
+        truth_degree = tf.math.sigmoid(logit)
         return truth_degree
 
     def _call_with_class_indexing(self, inputs: List[tf.Tensor], *args: Any, **kwargs: Any) -> tf.Tensor:
@@ -505,12 +508,12 @@ class _SigmoidTfModel(tf.keras.Model):
         return self.logits_model.trainable_variables
 
 
-class _SoftmaxTfModel(tf.keras.Model):
-    def __init__(self, logits_model: tf.keras.Model, **kwargs: Any) -> None:
+class _SoftmaxTfModel(keras.Model):
+    def __init__(self, logits_model: keras.Model, **kwargs: Any) -> None:
         """ logits_model: Must have last axis for classes, even if only one class. """
         super().__init__()
         self.logits_model = logits_model
-        
+
     def call(self, inputs: List[tf.Tensor], *args: Any, **kwargs: Any) -> tf.Tensor:
         """ inputs[-1] are the classes to index """
         logits_model_inputs, indices = inputs[:-1], inputs[-1]
@@ -518,7 +521,7 @@ class _SoftmaxTfModel(tf.keras.Model):
         truth_degrees = tf.nn.softmax(logits)
         indices = tf.cast(indices, tf.int32)
         return tf.gather_nd(truth_degrees, indices, batch_dims=1)
-    
+
     @property
     def trainable_variables(self) -> list[tf.Variable]:
         return self.logits_model.trainable_variables

@@ -56,8 +56,10 @@ class TestConstant(unittest.TestCase):
     def test_trainable(self):
         for c_val in self.c_vals:
             c = core.Constant(c_val, trainable=True)
-            self.assertTrue(array_allclose(c.tensor.numpy(), c_val))
-            self.assertTrue(isinstance(c.tensor, tf.Variable))
+            self.assertIsNotNone(c)
+            self.assertIsNotNone(c.tensor)
+            self.assertTrue(array_allclose(c.tensor.numpy(), c_val), msg=f"Not found c_val={c_val}")
+            self.assertTrue(isinstance(c.tensor, tf.Variable), msg=f"Not a tf.Variable: {type(c.tensor)}")
             self.assertTrue(c.tensor.trainable)
             self.assertEqual(c.free_vars, [])
 
@@ -77,14 +79,14 @@ class TestVariable(unittest.TestCase):
             self.assertTrue(isinstance(x.tensor, tf.Tensor))
             self.assertEqual(x.free_vars, [label])
             self.assertEqual(x.label, label)
-    
+
     def test_from_trainable_constants(self):
         c1 = core.Constant([2.1,3], trainable=True)
         c2 = core.Constant([4.5,0.8], trainable=True)
         with tf.GradientTape() as tape:
             x = core.Variable.from_constants('x', [c1,c2], tape=tape)
         self.assertTrue(tape.gradient(x.tensor,c1.tensor) is not None)
-        
+
         tape = tf.GradientTape()
         with self.assertRaises(ValueError):
             x = core.Variable.from_constants('x', [c1,c2], tape=tape)
@@ -125,7 +127,7 @@ class TestPredicate(unittest.TestCase):
         self.assertTrue(array_allclose(P(self.x).tensor, tf.squeeze(P.model(self.x.tensor))))
         self.assertEqual(P(self.x).free_vars,['x'])
         self.assertEqual(P(self.x)._get_dim_of_free_var('x'), self.n_x)
-        
+
     def test_from_lambda_1input(self):
         mu = tf.constant([2.,3.])
         P = core.Predicate.Lambda(lambda x: tf.exp(-tf.norm(x-mu,axis=1)))
@@ -137,7 +139,7 @@ class TestPredicate(unittest.TestCase):
         self.assertEqual(P(self.x)._get_dim_of_free_var('x'), self.n_x)
 
     def test_from_default_MLP_1input(self):
-        P = core.Predicate.MLP(input_shapes=[2])
+        P = core.Predicate.MLP(input_shapes=[[2]])
         # Produces correct result on constant
         self.assertEqual(P(self.c1).tensor, P.model(tf.expand_dims(self.c1.tensor,axis=0)))
         # Produces correct outputs with variable
@@ -153,16 +155,17 @@ class TestPredicate(unittest.TestCase):
             def call(self, inputs):
                 x = tf.concat([inputs[0],inputs[1]],axis=1)
                 return self.dense1(x)
-        P = core.Predicate(ModelP())
+        P = core.Predicate(model=ModelP())
         # Produces correct result on constant
         self.assertEqual(
-            P([self.c1,self.c2]).tensor, 
+            P([self.c1,self.c2]).tensor,
             P.model([tf.expand_dims(self.c1.tensor,axis=0),
                 tf.expand_dims(self.c2.tensor,axis=0)]))
         # Produces correct outputs with variable
         self.assertEqual(
-            P([self.x,self.y]).take('x',0).take('y',0).tensor, 
-            P.model([tf.gather(self.x.tensor,[0]),tf.gather(self.y.tensor,[0])]))
+            P([self.x,self.y]).take('x',0).take('y',0).tensor,
+            P.model([tf.gather(self.x.tensor,[0]),tf.gather(self.y.tensor,[0])])
+        )
         self.assertEqual(sorted(P([self.x,self.y]).free_vars),['x','y'])
         self.assertEqual(P([self.x,self.y])._get_dim_of_free_var('x'), self.n_x)
         self.assertEqual(P([self.x,self.y])._get_dim_of_free_var('y'), self.n_y)
@@ -171,27 +174,27 @@ class TestPredicate(unittest.TestCase):
         P = core.Predicate.Lambda(lambda args: tf.exp(-tf.norm(args[0]-args[1],axis=1)))
         # Produces correct result on constant
         self.assertEqual(
-            P([self.c1,self.c2]).tensor, 
+            P([self.c1,self.c2]).tensor,
             P.model([tf.expand_dims(self.c1.tensor,axis=0),
                 tf.expand_dims(self.c2.tensor,axis=0)]))
         # Produces correct outputs with variable
         self.assertEqual(
-            P([self.x,self.y]).take('x',0).take('y',0).tensor, 
+            P([self.x,self.y]).take('x',0).take('y',0).tensor,
             P.model([tf.gather(self.x.tensor,[0]),tf.gather(self.y.tensor,[0])]))
         self.assertEqual(sorted(P([self.x,self.y]).free_vars),['x','y'])
         self.assertEqual(P([self.x,self.y])._get_dim_of_free_var('x'), self.n_x)
         self.assertEqual(P([self.x,self.y])._get_dim_of_free_var('y'), self.n_y)
 
     def test_from_default_MLP_2inputs(self):
-        P = core.Predicate.MLP(input_shapes=[2,2])
+        P = core.Predicate.MLP(input_shapes=[[2],[2]])
         # Produces correct result on constant
         self.assertTrue(array_allclose(
-            tf.squeeze(P([self.c1,self.c2]).tensor), 
+            tf.squeeze(P([self.c1,self.c2]).tensor),
             tf.squeeze(P.model([tf.expand_dims(self.c1.tensor,axis=0),
                 tf.expand_dims(self.c2.tensor,axis=0)])) ))
         # Produces correct outputs with variable
         self.assertTrue(array_allclose(
-            tf.squeeze(P([self.x,self.y]).take('x',0).take('y',0).tensor), 
+            tf.squeeze(P([self.x,self.y]).take('x',0).take('y',0).tensor),
             tf.squeeze(P.model([tf.gather(self.x.tensor,[0]),tf.gather(self.y.tensor,[0])])) ))
         self.assertEqual(sorted(P([self.x,self.y]).free_vars),['x','y'])
         self.assertEqual(P([self.x,self.y])._get_dim_of_free_var('x'), self.n_x)
@@ -212,7 +215,7 @@ class TestFunction(unittest.TestCase):
                 super().__init__()
                 self.dense1 = tf.keras.layers.Dense(5)
             def call(self, x):
-                return self.dense1(x)   
+                return self.dense1(x)
         f = core.Function(ModelF())
         # Produces correct result on constant
         self.assertTrue(array_allclose(f(self.c1).tensor, f.model(tf.expand_dims(self.c1.tensor,axis=0))[0]))
@@ -220,32 +223,32 @@ class TestFunction(unittest.TestCase):
         self.assertTrue(array_allclose(f(self.x).tensor, f.model(self.x.tensor)))
         self.assertEqual(f(self.x).free_vars,['x'])
         self.assertEqual(f(self.x)._get_dim_of_free_var('x'), self.n_x)
-        
+
     def test_from_lambda(self):
         f = core.Function.Lambda(lambda args: args[0]-args[1])
         # Produces correct result on constant
         self.assertTrue(array_allclose(
-            f([self.c1,self.c2]).tensor, 
+            f([self.c1,self.c2]).tensor,
             f.model([tf.expand_dims(self.c1.tensor,axis=0),
                 tf.expand_dims(self.c2.tensor,axis=0)])[0] ))
         # Produces correct outputs with variable
         self.assertTrue(array_allclose(
-            f([self.x,self.y]).take('x',0).take('y',0).tensor, 
+            f([self.x,self.y]).take('x',0).take('y',0).tensor,
             f.model([tf.gather(self.x.tensor,[0]),tf.gather(self.y.tensor,[0])])[0] ))
         self.assertEqual(sorted(f([self.x,self.y]).free_vars),['x','y'])
         self.assertEqual(f([self.x,self.y])._get_dim_of_free_var('x'), self.n_x)
         self.assertEqual(f([self.x,self.y])._get_dim_of_free_var('y'), self.n_y)
 
     def test_from_default_MLP(self):
-        f = core.Function.MLP(input_shapes=[2,2],output_shape=[2])
+        f = core.Function.MLP(input_shapes=[[2],[2]],output_shape=[2])
         # Produces correct result on constant
         self.assertTrue(array_allclose(
-            f([self.c1,self.c2]).tensor, 
+            f([self.c1,self.c2]).tensor,
             f.model([tf.expand_dims(self.c1.tensor,axis=0),
                 tf.expand_dims(self.c2.tensor,axis=0)])[0] ))
         # Produces correct outputs with variable
         self.assertTrue(array_allclose(
-            f([self.x,self.y]).take('x',0).take('y',0).tensor, 
+            f([self.x,self.y]).take('x',0).take('y',0).tensor,
             f.model([tf.gather(self.x.tensor,[0]),tf.gather(self.y.tensor,[0])])[0] ))
         self.assertEqual(sorted(f([self.x,self.y]).free_vars),['x','y'])
         self.assertEqual(f([self.x,self.y])._get_dim_of_free_var('x'), self.n_x)
@@ -292,7 +295,7 @@ class TestBroadcast(unittest.TestCase):
                 np.random.rand(v_s["n_individuals"],*v_s["shape_individual"])
             )
             self.xs[label] = x
-        
+
     def test_free_dims_broadcast_variables(self):
         """Adds the correct dimensions for the free variables."""
         exprs = core.broadcast_exprs(list(self.xs.values()), in_place=False)
@@ -333,7 +336,7 @@ class TestBroadcast(unittest.TestCase):
             self.assertEqual(sorted(expr.free_vars), sorted(self.var_settings.keys()))
             for label,v_s in self.var_settings.items():
                 self.assertEqual(expr._get_dim_of_free_var(label).numpy(), v_s["n_individuals"])
-            
+
     def test_in_place(self):
         pass
 
@@ -346,8 +349,8 @@ class TestConnective(unittest.TestCase):
         self.x = core.Variable('x',np.random.normal(0.,1.,(self.n_x,2)))
         self.n_y = 5
         self.y = core.Variable('y',np.random.normal(0.,4.,(self.n_y,2)))
-        self.p1 = core.Predicate.MLP([2])
-        self.p2 = core.Predicate.MLP([2,2])
+        self.p1 = core.Predicate.MLP([[2]])
+        self.p2 = core.Predicate.MLP([[2],[2]])
         self.a = core.Proposition(0., trainable=True)
 
     def test_unary_connective_variables(self):
@@ -402,9 +405,9 @@ class TestQuantifier(unittest.TestCase):
         self.y = core.Variable('y',np.random.normal(0.,4.,(self.n_y,2)))
         self.n_z = 5
         self.z = core.Variable('z',np.random.normal(0.,4.,(self.n_z,2)))
-        self.p1 = core.Predicate.MLP([2,2])
-        self.p2 = core.Predicate.MLP([2,2,2])
-        
+        self.p1 = core.Predicate.MLP([[2],[2]])
+        self.p2 = core.Predicate.MLP([[2],[2],[2]])
+
     def test_aggreg_one_var(self):
         res = self.Forall(self.x,self.p1([self.x,self.y]))
         self.assertEqual(sorted(res.free_vars),['y'])
@@ -427,16 +430,16 @@ class TestQuantifier(unittest.TestCase):
             phi = self.p1([x,self.y])
             res = self.Forall(x,phi)
         self.assertTrue(tape.gradient(res.tensor,c_s[0].tensor) is not None)
-        
+
     def test_values_correct(self):
-        phi = self.p2([self.x,self.y,self.z])      
+        phi = self.p2([self.x,self.y,self.z])
         self.assertTrue(array_allclose(
             self.Forall((self.y),phi).take('x',0).take('z',0).tensor,
             self.Forall.aggreg_op(phi.tensor, axis=phi._get_axis_of_free_var('y'))[0,0]
         ))
         self.assertTrue(array_allclose(
             self.Forall((self.x,self.z),phi).take('y',0).tensor,
-            self.Forall.aggreg_op(phi.tensor, 
+            self.Forall.aggreg_op(phi.tensor,
                 axis=[phi._get_axis_of_free_var('x'),phi._get_axis_of_free_var('z')])[0]
         ))
 
@@ -448,7 +451,7 @@ class TestTransposeFreeVars(unittest.TestCase):
         self.y = core.Variable('y',np.random.normal(0.,4.,(self.n_y,2)))
         self.n_z = 3
         self.z = core.Variable('z',np.random.normal(0.,4.,(self.n_z,2)))
-        self.p = core.Predicate.MLP([2,2,2])
+        self.p = core.Predicate.MLP([[2],[2],[2]])
 
     def test_transpose(self):
         phi = self.p([self.x,self.y,self.z])
@@ -464,7 +467,7 @@ class TestTransposeFreeVars(unittest.TestCase):
         self.assertEqual(phi._get_axis_of_free_var('x'),var_order.index('x'))
         self.assertEqual(phi._get_dim_of_free_var('z'),self.n_z)
         self.assertEqual(phi._get_axis_of_free_var('z'),var_order.index('z'))
-    
+
     def test_conserves_values(self):
         phi = self.p([self.x,self.y,self.z])
         phi1 = core.transpose_free_vars(phi, ['x','y','z'])
@@ -490,8 +493,8 @@ class TestBroadcastToMask(unittest.TestCase):
         self.mask1 = self.is_greater_than([self.x,self.y])
         self.mask2 = self.is_greater_than([self.add([self.x,self.y]), self.z])
 
-        self.p1 = core.Predicate.MLP([1,1])
-        self.p2 = core.Predicate.MLP([1,1,1])
+        self.p1 = core.Predicate.MLP([[1],[1]])
+        self.p2 = core.Predicate.MLP([[1],[1],[1]])
 
     def test_same_vars_in_wff(self):
         phi1 = self.p1([self.x,self.y])
@@ -499,24 +502,24 @@ class TestBroadcastToMask(unittest.TestCase):
         self.assertEqual(casted_phi1.free_vars[:len(self.mask1.free_vars)], self.mask1.free_vars)
         take_x = np.random.randint(self.n_x)
         self.assertTrue(array_allclose(
-            casted_phi1.take('x',take_x).tensor, 
+            casted_phi1.take('x',take_x).tensor,
             phi1.take('x', take_x).tensor))
         take_y = np.random.randint(self.n_y)
         self.assertTrue(array_allclose(
-            casted_phi1.take('y',take_y).tensor, 
+            casted_phi1.take('y',take_y).tensor,
             phi1.take('y', take_y).tensor))
-        
+
     def test_more_vars_in_wff(self):
         phi2 = self.p2([self.x,self.y,self.z])
         casted_phi2 = core.broadcast_wff_and_mask(phi2,self.mask1)
         self.assertEqual(casted_phi2.free_vars[:len(self.mask1.free_vars)], self.mask1.free_vars)
         take_x = np.random.randint(self.n_x)
         self.assertTrue(array_allclose(
-            casted_phi2.take('x',take_x).tensor, 
+            casted_phi2.take('x',take_x).tensor,
             phi2.take('x', take_x).tensor))
         take_y = np.random.randint(self.n_y)
         self.assertTrue(array_allclose(
-            casted_phi2.take('y',take_y).tensor, 
+            casted_phi2.take('y',take_y).tensor,
             phi2.take('y', take_y).tensor))
 
     def test_less_vars_in_wff(self):
@@ -525,11 +528,11 @@ class TestBroadcastToMask(unittest.TestCase):
         self.assertEqual(casted_phi1.free_vars[:len(self.mask2.free_vars)], self.mask2.free_vars)
         take_x = np.random.randint(self.n_x)
         self.assertTrue(array_allclose(
-            casted_phi1.take('x',take_x).take('z',0).tensor, 
+            casted_phi1.take('x',take_x).take('z',0).tensor,
             phi1.take('x', take_x).tensor))
         take_y = np.random.randint(self.n_y)
         self.assertTrue(array_allclose(
-            casted_phi1.take('y',take_y).take('z',0).tensor, 
+            casted_phi1.take('y',take_y).take('z',0).tensor,
             phi1.take('y', take_y).tensor))
 
 class TestGuardedQuantifier(unittest.TestCase):
@@ -543,11 +546,11 @@ class TestGuardedQuantifier(unittest.TestCase):
         )
         self.mask1 = self.is_greater_than([self.x,self.y])
 
-        self.p1 = core.Predicate.MLP([1,1])
+        self.p1 = core.Predicate.MLP([[1],[1]])
 
         self.Forall = core.Wrapper_Quantifier(fuzzy_ops.Aggreg_pMeanError(p=2),semantics="forall")
         self.Exists = core.Wrapper_Quantifier(fuzzy_ops.Aggreg_pMean(p=5),semantics="exists")
-        
+
 
     def test_values_correct(self):
         take_x = np.random.randint(self.n_x)
@@ -558,7 +561,7 @@ class TestGuardedQuantifier(unittest.TestCase):
 
     def test_gradients(self):
         pass
-    
+
     def test_empty_semantics_forall(self):
         x = core.Variable('x',np.random.rand(self.n_x,1))
         y = core.Variable('y',np.random.rand(self.n_y,1)+1.) # all y are greater
@@ -597,7 +600,7 @@ class TestGuardedQuantifier(unittest.TestCase):
         #        [  ,.1,.5,  ],
         #        [  ,  ,.8,  ]]),
         Exists = core.Wrapper_Quantifier(fuzzy_ops.Aggreg_Mean(),semantics="exists")
-        
+
         actual = Exists(x,wff,mask=mask)
         expected = np.array([.4,.15,.65,.0])
         self.assertTrue(array_allclose(actual.tensor,expected))
@@ -613,10 +616,10 @@ class TestTypeCheck(unittest.TestCase):
         self.x = core.Variable('x',np.random.rand(3,1))
         self.y = core.Variable('y',np.random.rand(4,1))
         self.c = core.Constant([3.], trainable=False)
-        self.f1 = core.Function.MLP(input_shapes=[1],output_shape=[1])
-        self.f2 = core.Function.MLP(input_shapes=[1,1],output_shape=[1])
-        self.p1 = core.Predicate.MLP(input_shapes=[1])
-        self.p2 = core.Predicate.MLP(input_shapes=[1,1])
+        self.f1 = core.Function.MLP(input_shapes=[[1]],output_shape=[1])
+        self.f2 = core.Function.MLP(input_shapes=[[1],[1]],output_shape=[1])
+        self.p1 = core.Predicate.MLP(input_shapes=[[1]])
+        self.p2 = core.Predicate.MLP(input_shapes=[[1],[1]])
         self.q = core.Proposition(0., trainable=False)
         self.And = core.Wrapper_Connective(fuzzy_ops.And_Prod())
         self.Not = core.Wrapper_Connective(fuzzy_ops.Not_Std())
@@ -677,4 +680,3 @@ class TestTypeCheck(unittest.TestCase):
         with self.assertRaises(TypeError):
             self.Exists((self.x,self.y),self.p2([self.x,self.y]),mask=self.mask.tensor)
 
-        
