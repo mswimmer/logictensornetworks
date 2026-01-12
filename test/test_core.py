@@ -149,6 +149,7 @@ class TestPredicate(unittest.TestCase):
         self.assertEqual(P(self.x)._get_dim_of_free_var('x'), self.n_x)
 
     def test_from_tf_model_2inputs(self):
+        """TODO: This test is producing inconsistant results. That problem needs to be fixed."""
         class ModelP(keras.Model):
             def __init__(self):
                 super().__init__()
