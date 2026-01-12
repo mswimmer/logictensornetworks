@@ -3,6 +3,7 @@ import pdb
 
 import numpy as np
 import tensorflow as tf
+import keras
 
 from ltn import core
 from ltn import fuzzy_ops
@@ -114,10 +115,10 @@ class TestPredicate(unittest.TestCase):
         self.y = core.Variable('y',np.random.normal(0.,4.,(self.n_y,2)))
 
     def test_from_tf_model_1input(self):
-        class ModelP(tf.keras.Model):
+        class ModelP(keras.Model):
             def __init__(self):
                 super().__init__()
-                self.dense1 = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
+                self.dense1 = keras.layers.Dense(1, activation=tf.nn.sigmoid)
             def call(self, x):
                 return self.dense1(x)
         P = core.Predicate(ModelP())
@@ -148,10 +149,10 @@ class TestPredicate(unittest.TestCase):
         self.assertEqual(P(self.x)._get_dim_of_free_var('x'), self.n_x)
 
     def test_from_tf_model_2inputs(self):
-        class ModelP(tf.keras.Model):
+        class ModelP(keras.Model):
             def __init__(self):
                 super().__init__()
-                self.dense1 = tf.keras.layers.Dense(1, activation=tf.nn.sigmoid)
+                self.dense1 = keras.layers.Dense(1, activation=tf.nn.sigmoid)
             def call(self, inputs):
                 x = tf.concat([inputs[0],inputs[1]],axis=1)
                 return self.dense1(x)
@@ -210,10 +211,10 @@ class TestFunction(unittest.TestCase):
         self.y = core.Variable('y',np.random.normal(0.,4.,(self.n_y,2)))
 
     def test_from_tf_model(self):
-        class ModelF(tf.keras.Model):
+        class ModelF(keras.Model):
             def __init__(self):
                 super().__init__()
-                self.dense1 = tf.keras.layers.Dense(5)
+                self.dense1 = keras.layers.Dense(5)
             def call(self, x):
                 return self.dense1(x)
         f = core.Function(ModelF())
