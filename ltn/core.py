@@ -25,7 +25,7 @@ class Expression:
 
     def _get_axis_of_free_var(self, free_var: VarLabel) -> int:
         if free_var not in self.free_vars:
-            raise ValueError("%s is not a free variable occurring in the expression."%free_var)
+            raise ValueError(f"{free_var} is not a free variable occurring in the expression.")
         return self.free_vars.index(free_var)
 
     def _get_dim_of_free_var(self, free_var: VarLabel) -> tf.Tensor:
@@ -65,7 +65,7 @@ class Variable(Term):
     def __init__(self, label: VarLabel, values: FloatTensorLike) -> None:
         for reserved in ["diag","_flat"]:
             if label.startswith(reserved):
-                raise ValueError("Labels starting with %s are reserved." % reserved)
+                raise ValueError(f"Labels starting with {reserved} are reserved.")
         try:
             tensor = tf.constant(values, dtype=tf.float32)
         except TypeError:
@@ -87,9 +87,11 @@ class Variable(Term):
             cls, label: VarLabel, constants: List[Constant], tape: Optional[tf.GradientTape] = None
         ) -> Variable:
         if not tape:
-            warnings.warn("No instance of %s passed in argument when creating a LTN variable from constants. "\
-                "LTN cannot verify that a tape is recording. If you created the variable within the scope of a tape, "\
-                "or that you don't need to track weights (e.g. non-trainable constants), you can ignore this warning."%tf.GradientTape)
+            warnings.warn(f"No instance of {tf.GradientTape} passed in argument when creating"
+                        "a LTN variable from constants. LTN cannot verify that a tape is "
+                        "recording. If you created the variable within the scope of a tape, "
+                        "or that you don't need to track weights (e.g. non-trainable constants),"
+                        "you can ignore this warning.")
         else:
             if not tape._recording:
                 raise ValueError("The tape is not recording.")
@@ -122,8 +124,8 @@ class Proposition(Formula):
     def __init__(self, truth_value: float, trainable: bool) -> None:
         try:
             assert 0 <= float(truth_value) <= 1
-        except:
-            raise ValueError("The truth value of a proposition should be a float in [0,1].")
+        except Exception as e:
+            raise ValueError("The truth value of a proposition should be a float in [0,1].") from e
         self._trainable = trainable
         if self._trainable:
             tensor = tf.Variable(truth_value,
@@ -175,10 +177,11 @@ class _Model:
 
     @property
     def trainable_variables(self) -> List[tf.Variable]:
+        """Get the trainable variables of the underlying Keras model."""
         if not self.model.trainable_variables:
-            warnings.warn("The 'trainable_variables' attribute returned an empty list. Make sure that "\
-                    "the weights of the layers in the %s instance have been initialized, "\
-                    "for example by calling the model a first time." % keras.Model)
+            warnings.warn("The 'trainable_variables' attribute returned an empty list. Make sure that "
+                    f"the weights of the layers in the {keras.Model} instance have been initialized, "
+                    "for example by calling the model a first time.")
         return self.model.trainable_variables
 
 class Predicate(_Model):
@@ -189,13 +192,13 @@ class Predicate(_Model):
     def __call__(self, inputs: Union[Term, List[Term]], *args: Any, **kwargs: Any) -> Formula:
         if not isinstance(inputs,(list,tuple)):
             if not isinstance(inputs, Term):
-                raise TypeError("The input to a LTN Predicate should be instances of %s. "\
-                        "Got an instance of %s instead." % (Term, type(inputs)))
+                raise TypeError(f"The input to a LTN Predicate should be instances of {Term}. "
+                        f"Got an instance of {type(inputs)} instead.")
         else:
             for x in inputs:
                 if not isinstance(x, Term):
-                    raise TypeError("The input to a LTN Predicate should be instances of %s. "\
-                            "Got an instance of %s instead." % (Term, type(x)))
+                    raise TypeError(f"The input to a LTN Predicate should be instances of {Term}. "
+                            f"Got an instance of {type(x)} instead.")
         expr = super().__call__(inputs, *args, **kwargs)
         wff = Formula(expr.tensor, expr.free_vars)
         return wff
@@ -276,13 +279,13 @@ class Function(_Model):
     def __call__(self, inputs: Union[Term, List[Term]], *args: Any, **kwargs: Any) -> Term:
         if not isinstance(inputs,(list,tuple)):
             if not isinstance(inputs, Term):
-                raise TypeError("The input to a LTN Function should be instances of %s. "\
-                        "Got an instance of %s instead." % (Term, type(inputs)))
+                raise TypeError(f"The input to a LTN Function should be instances of {Term}. "
+                        f"Got an instance of {type(inputs)} instead.")
         else:
             for x in inputs:
                 if not isinstance(x, Term):
-                    raise TypeError("The input to a LTN Function should be instances of %s. "\
-                            "Got an instance of %s instead." % (Term, type(x)))
+                    raise TypeError(f"The input to a LTN Function should be instances of {Term}. "
+                            f"Got an instance of {type(x)} instead.")
         expr = super().__call__(inputs, *args, **kwargs)
         term = Term(expr.tensor, expr.free_vars)
         return term
@@ -322,8 +325,8 @@ class tf_LambdaModel(keras.Model):
 def diag(*variables: Variable) -> List[Variable]:
     for var in variables:
         if var.free_vars[0].startswith("diag_"):
-            raise ValueError(f"Trying to diag a variable that is already temporarily"
-                +"diagged: {var.label}.")
+            raise ValueError("Trying to diag a variable that is already temporarily"
+                f"diagged: {var.label}.")
     diag_label = "diag_"+"_".join([var.label for var in variables])
     for var in variables:
         var.free_vars = [diag_label]
@@ -340,8 +343,8 @@ def diag_lock(*variables: Variable) -> None:
     """In place"""
     for var in variables:
         if var.free_vars[0].startswith("diag"):
-            raise ValueError(f"Trying to diaglock a variable that is temporarily diagged: "
-                    +"{var.label}.\nCall `diag_lock` on variables when they are undiagged.")
+            raise ValueError("Trying to diaglock a variable that is temporarily diagged: "
+                    f"{var.label}.\nCall `diag_lock` on variables when they are undiagged.")
     diag_label = "diaglock_"+"_".join([var.label for var in variables])
     for var in variables:
         var.locked_diag_label = diag_label
@@ -388,16 +391,18 @@ class Wrapper_Connective:
     def __call__(self, *wffs: Formula, **kwargs: Any) -> Formula:
         for x in wffs:
             if not isinstance(x, Formula):
-                raise TypeError("The operands of a LTN connective should be instances of %s. \
-                        Got an instance of %s instead." % (Formula, type(x)))
+                raise TypeError(f"The operands of a LTN connective should be instances of {Formula}. "
+                        f"Got an instance of {type(x)} instead.")
         wffs = broadcast_exprs(wffs)
         try:
             t_result = self.connective_op(*as_tensors(wffs), **kwargs)
-        except tf.errors.InvalidArgumentError:
-            raise ValueError("Could not connect formulas with shapes [%s] and free variables [%s]."
-                % (', '.join(map(str,[wff.shape for wff in wffs])),
-                ', '.join(map(str,[wff.free_vars for wff in wffs])))
-            )
+        except tf.errors.InvalidArgumentError as e:
+            raise ValueError("Could not connect formulas with shapes ["+
+                            ', '.join(map(str,[wff.shape for wff in wffs])) +
+                            "] and free variables ["+
+                            ', '.join(map(str,[wff.free_vars for wff in wffs]))
+                            +"]."
+                ) from e
         result = Formula(t_result, wffs[0].free_vars)
         return result
 
@@ -417,16 +422,16 @@ class Wrapper_Quantifier:
         variables = [variables] if not isinstance(variables,(list,tuple)) else variables
         for x in variables:
             if not isinstance(x, Variable):
-                raise TypeError("The quantified variables should be instances of %s. "\
-                        "Got an instance of %s instead." % (Variable, type(x)))
+                raise TypeError(f"The quantified variables should be instances of {Variable}. "
+                        f"Got an instance of {type(x)} instead.")
         if not isinstance(wff, Formula):
-            raise TypeError("The quantified expression should be an instance of %s. "\
-                    "Got an instance of %s instead." % (Formula, type(x)))
+            raise TypeError(f"The quantified expression should be an instance of {Formula}. "
+                    f"Got an instance of {type(wff)} instead.")
         aggreg_vars = set([var.free_vars[0] for var in variables])
         if mask is not None:
             if not isinstance(mask, Formula):
-                raise TypeError("The mask argument should be an instance of %s. "\
-                        "Got an instance of %s instead." % (Formula, type(mask)))
+                raise TypeError(f"The mask argument should be an instance of {Formula}. "
+                        f"Got an instance of {type(mask)} instead.")
             mask = transpose_free_vars(mask,
                     new_var_order = [var for var in mask.free_vars if var not in aggreg_vars]   # important to put aggreg dims last,
                             + [var for var in mask.free_vars if var in aggreg_vars])            # to keep other dims in the ragged result
