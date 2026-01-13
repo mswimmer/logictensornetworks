@@ -1,6 +1,6 @@
 """Core classes for Logic Tensor Networks (LTN) in TensorFlow."""
 from __future__ import annotations
-from typing import Optional, Union, List, Callable, Any
+from typing import Optional, Sequence, Union, List, Callable, Any, cast
 import warnings
 
 import tensorflow as tf
@@ -9,6 +9,7 @@ from keras import layers
 
 VarLabel = str
 FloatTensorLike = tf.types.experimental.TensorLike # to update when tf supports better type annotations
+
 
 class Expression:
     """Base class for LTN expressions (Terms and Formulas)."""
@@ -44,6 +45,7 @@ class Expression:
         result.free_vars = remaining_free_vars
         return result
 
+
 class Term(Expression):
     """Class for LTN Terms."""
     def __init__(self, tensor: tf.Tensor, free_vars: List[VarLabel]) -> None:
@@ -52,6 +54,7 @@ class Term(Expression):
     def _copy(self) -> Term:
         return Term(self.tensor, self.free_vars.copy())
 
+
 class Formula(Expression):
     """Class for LTN Formulas."""
     def __init__(self, tensor: tf.Tensor, free_vars: List[VarLabel]) -> None:
@@ -59,6 +62,7 @@ class Formula(Expression):
 
     def _copy(self) -> Formula:
         return Formula(self.tensor, self.free_vars.copy())
+
 
 class Variable(Term):
     """Class for LTN Variables."""
@@ -77,7 +81,7 @@ class Variable(Term):
         free_vars = [label]
         super().__init__(tensor, free_vars=free_vars)
         self.label: VarLabel = label
-        self.locked_diag_label: str = None
+        self.locked_diag_label: Optional[str] = None
 
     def __repr__(self) -> str:
         return f"ltn.{self.__class__.__name__}(label={self.label}, tensor={self.tensor}, free_vars={self.free_vars})"
@@ -100,6 +104,7 @@ class Variable(Term):
         variable.tensor = tf.stack(as_tensors(constants))
         return variable
 
+
 class Constant(Term):
     """Class for LTN Constants."""
     def __init__(self, value: FloatTensorLike, trainable: bool) -> None:
@@ -118,6 +123,7 @@ class Constant(Term):
 
     def __repr__(self) -> str:
         return f"ltn.{self.__class__.__name__}(tensor={self.tensor}, trainable={self._trainable}, free_vars={self.free_vars})"
+
 
 class Proposition(Formula):
     """Class for LTN Propositions."""
@@ -140,6 +146,7 @@ class Proposition(Formula):
     def __repr__(self) -> str:
         return f"ltn.{self.__class__.__name__}(tensor={self.tensor}, trainable={self._trainable}, free_vars={self.free_vars})"
 
+
 def _flatten_free_dims(
         exprs: List[Expression],
         in_place: bool = False
@@ -157,7 +164,10 @@ class _Model:
         self.model: keras.Model = model
         self.with_feature_dims: bool = with_feature_dims
 
-    def __call__(self, inputs: Union[Term, List[Term]], *args: Any, **kwargs: Any) -> Expression:
+    def __call__(self,
+                 inputs: Union[Expression, List[Expression]],
+                 *args: Any,
+                 **kwargs: Any) -> Expression:
         if not isinstance(inputs,(list,tuple)):
             inputs = [inputs]
             flat_inputs = _flatten_free_dims(inputs)
@@ -188,6 +198,7 @@ class Predicate(_Model):
     """Class for LTN Predicates."""
     def __init__(self, model: keras.Model) -> None:
         super().__init__(model, with_feature_dims=False)
+        self.logits_model: Optional[keras.Model] = None
 
     def __call__(self, inputs: Union[Term, List[Term]], *args: Any, **kwargs: Any) -> Formula:
         if not isinstance(inputs,(list,tuple)):
@@ -351,7 +362,7 @@ def diag_lock(*variables: Variable) -> None:
         var.free_vars = [var.locked_diag_label]
 
 
-def as_tensors(expressions: List[Expression]) -> List[tf.Tensor]:
+def as_tensors(expressions: Sequence[Expression]) -> List[tf.Tensor]:
     """Extract the tensors from a list of expressions."""
     return [expr.tensor for expr in expressions]
 
@@ -388,7 +399,8 @@ class Wrapper_Connective:
     def __init__(self, connective_op: Callable) -> None:
         self.connective_op = connective_op
 
-    def __call__(self, *wffs: Formula, **kwargs: Any) -> Formula:
+    def __call__(self, *_wffs: Formula, **kwargs: Any) -> Formula:
+        wffs: List[Expression] = list(_wffs)
         for x in wffs:
             if not isinstance(x, Formula):
                 raise TypeError(f"The operands of a LTN connective should be instances of {Formula}. "
@@ -432,9 +444,11 @@ class Wrapper_Quantifier:
             if not isinstance(mask, Formula):
                 raise TypeError(f"The mask argument should be an instance of {Formula}. "
                         f"Got an instance of {type(mask)} instead.")
-            mask = transpose_free_vars(mask,
+            mask = cast(Formula,
+                        transpose_free_vars(mask,
                     new_var_order = [var for var in mask.free_vars if var not in aggreg_vars]   # important to put aggreg dims last,
                             + [var for var in mask.free_vars if var in aggreg_vars])            # to keep other dims in the ragged result
+            )
             wff = broadcast_wff_and_mask(wff, mask)
             mask.tensor = tf.cast(mask.tensor, tf.bool)
             t_ragged_wff = tf.ragged.boolean_mask(wff.tensor, mask.tensor)
@@ -490,7 +504,10 @@ def broadcast_wff_and_mask(
         wff.free_vars.append(var)
     # 2. transpose wff so that the masked vars on the first axes
     vars_not_in_mask = [var for var in wff.free_vars if var not in mask.free_vars]
-    wff = transpose_free_vars(wff, new_var_order=mask.free_vars + vars_not_in_mask)
+    wff = cast(
+        Formula,
+        transpose_free_vars(wff, new_var_order=mask.free_vars + vars_not_in_mask)
+    )
     return wff
 
 
