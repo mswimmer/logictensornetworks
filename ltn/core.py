@@ -1,18 +1,17 @@
+"""Core classes for Logic Tensor Networks (LTN) in TensorFlow."""
 from __future__ import annotations
 from typing import Optional, Union, List, Callable, Any
 import warnings
 
-# import numpy as np
 import tensorflow as tf
-# import tensorflow.keras as keras
 import keras
-# from tensorflow.keras import layers
 from keras import layers
 
 VarLabel = str
 FloatTensorLike = tf.types.experimental.TensorLike # to update when tf supports better type annotations
 
 class Expression:
+    """Base class for LTN expressions (Terms and Formulas)."""
     def __init__(self, tensor: tf.Tensor, free_vars: List[VarLabel]) -> None:
         self.tensor: tf.Tensor = tensor
         self.free_vars: List[VarLabel] = free_vars
@@ -46,6 +45,7 @@ class Expression:
         return result
 
 class Term(Expression):
+    """Class for LTN Terms."""
     def __init__(self, tensor: tf.Tensor, free_vars: List[VarLabel]) -> None:
         super().__init__(tensor, free_vars=free_vars)
 
@@ -53,6 +53,7 @@ class Term(Expression):
         return Term(self.tensor, self.free_vars.copy())
 
 class Formula(Expression):
+    """Class for LTN Formulas."""
     def __init__(self, tensor: tf.Tensor, free_vars: List[VarLabel]) -> None:
         super().__init__(tensor, free_vars=free_vars)
 
@@ -60,6 +61,7 @@ class Formula(Expression):
         return Formula(self.tensor, self.free_vars.copy())
 
 class Variable(Term):
+    """Class for LTN Variables."""
     def __init__(self, label: VarLabel, values: FloatTensorLike) -> None:
         for reserved in ["diag","_flat"]:
             if label.startswith(reserved):
@@ -82,7 +84,7 @@ class Variable(Term):
 
     @classmethod
     def from_constants(
-            cls: Variable, label: VarLabel, constants: List[Constant], tape: Optional[tf.GradientTape] = None
+            cls, label: VarLabel, constants: List[Constant], tape: Optional[tf.GradientTape] = None
         ) -> Variable:
         if not tape:
             warnings.warn("No instance of %s passed in argument when creating a LTN variable from constants. "\
@@ -97,6 +99,7 @@ class Variable(Term):
         return variable
 
 class Constant(Term):
+    """Class for LTN Constants."""
     def __init__(self, value: FloatTensorLike, trainable: bool) -> None:
         self._trainable = trainable
         if self._trainable:
@@ -115,6 +118,7 @@ class Constant(Term):
         return f"ltn.{self.__class__.__name__}(tensor={self.tensor}, trainable={self._trainable}, free_vars={self.free_vars})"
 
 class Proposition(Formula):
+    """Class for LTN Propositions."""
     def __init__(self, truth_value: float, trainable: bool) -> None:
         try:
             assert 0 <= float(truth_value) <= 1
@@ -178,6 +182,7 @@ class _Model:
         return self.model.trainable_variables
 
 class Predicate(_Model):
+    """Class for LTN Predicates."""
     def __init__(self, model: keras.Model) -> None:
         super().__init__(model, with_feature_dims=False)
 
@@ -196,9 +201,12 @@ class Predicate(_Model):
         return wff
 
     @classmethod
-    def FromLogits(cls, logits_model: keras.Model, activation_function: str,
-            with_class_indexing=True, **kwargs: Any) -> Predicate:
-        r"""Constructor from a model that outputs logits.
+    def FromLogits(cls,
+                logits_model: keras.Model,
+                activation_function: str,
+                with_class_indexing=True,
+                **kwargs: Any) -> Predicate:
+        """Constructor from a model that outputs logits.
 
         A model for a predicate `P` classifying individuals `x` into n classes
         `class_1`, ..., `class_n` will likely output n logits using the same
@@ -242,7 +250,7 @@ class Predicate(_Model):
         return predicate
 
     @classmethod
-    def MLP(cls: Predicate,
+    def MLP(cls,
             input_shapes,
             hidden_layer_sizes=(16,16)) -> Predicate:
         inputs = [keras.Input(shape) for shape in input_shapes]
@@ -255,12 +263,13 @@ class Predicate(_Model):
         return cls(model)
 
     @classmethod
-    def Lambda(cls: Predicate, lambda_operator: Callable) -> Predicate:
+    def Lambda(cls, lambda_operator: Callable) -> Predicate:
         model = tf_LambdaModel(lambda_operator)
         return cls(model)
 
 
 class Function(_Model):
+    """Class for LTN Functions."""
     def __init__(self, model: keras.Model) -> None:
         super().__init__(model, with_feature_dims=True)
 
@@ -279,7 +288,7 @@ class Function(_Model):
         return term
 
     @classmethod
-    def MLP(cls: Function,
+    def MLP(cls,
             input_shapes,
             output_shape,
             hidden_layer_sizes = (16,16)) -> Function:
@@ -295,9 +304,10 @@ class Function(_Model):
         return cls(model)
 
     @classmethod
-    def Lambda(cls: Function, lambda_operator: Callable) -> Function:
+    def Lambda(cls, lambda_operator: Callable) -> Function:
         model = tf_LambdaModel(lambda_operator)
         return cls(model)
+
 
 class tf_LambdaModel(keras.Model):
     """ Simple `keras.Model` that implements a lambda layer."""
@@ -308,6 +318,7 @@ class tf_LambdaModel(keras.Model):
     def call(self, inputs: Union[tf.Tensor, List[tf.Tensor]]) -> tf.Tensor:
         return self.lambda_layer(inputs)
 
+
 def diag(*variables: Variable) -> List[Variable]:
     for var in variables:
         if var.free_vars[0].startswith("diag_"):
@@ -316,14 +327,16 @@ def diag(*variables: Variable) -> List[Variable]:
     diag_label = "diag_"+"_".join([var.label for var in variables])
     for var in variables:
         var.free_vars = [diag_label]
-    return variables
+    return list(variables)
+
 
 def undiag(*variables: Variable) -> List[Variable]:
     for var in variables:
         var.free_vars = [var.label] if var.locked_diag_label else [var.label]
-    return variables
+    return list(variables)
 
-def diag_lock(*variables: Variable) -> List[Variable]:
+
+def diag_lock(*variables: Variable) -> None:
     """In place"""
     for var in variables:
         if var.free_vars[0].startswith("diag"):
@@ -334,8 +347,11 @@ def diag_lock(*variables: Variable) -> List[Variable]:
         var.locked_diag_label = diag_label
         var.free_vars = [var.locked_diag_label]
 
+
 def as_tensors(expressions: List[Expression]) -> List[tf.Tensor]:
+    """Extract the tensors from a list of expressions."""
     return [expr.tensor for expr in expressions]
+
 
 def broadcast_exprs(
         exprs: List[Expression],
@@ -364,6 +380,7 @@ def broadcast_exprs(
         expr.free_vars = free_vars
     return exprs
 
+
 class Wrapper_Connective:
     def __init__(self, connective_op: Callable) -> None:
         self.connective_op = connective_op
@@ -383,6 +400,7 @@ class Wrapper_Connective:
             )
         result = Formula(t_result, wffs[0].free_vars)
         return result
+
 
 class Wrapper_Quantifier:
     def __init__(self, aggreg_op: Callable, semantics: str) -> None:
@@ -438,6 +456,7 @@ class Wrapper_Quantifier:
         undiag(*variables)
         return result
 
+
 class Wrapper_Formula_Aggregator:
     def __init__(self, aggreg_op: Callable) -> None:
         self.aggreg_op = aggreg_op
@@ -449,6 +468,7 @@ class Wrapper_Formula_Aggregator:
         t_result = self.aggreg_op(tf.stack(as_tensors(wffs)))
         result = Formula(t_result, free_vars=[])
         return result
+
 
 def broadcast_wff_and_mask(
         wff: Formula,
@@ -468,6 +488,7 @@ def broadcast_wff_and_mask(
     wff = transpose_free_vars(wff, new_var_order=mask.free_vars + vars_not_in_mask)
     return wff
 
+
 def transpose_free_vars(
         expr: Expression,
         new_var_order: List[VarLabel],
@@ -482,6 +503,7 @@ def transpose_free_vars(
 
 
 class _SigmoidTfModel(keras.Model):
+    """"""
     def __init__(self, logits_model: keras.Model, with_class_indexing: bool = False, **kwargs: Any) -> None:
         """ with_class_indexing: If true, must have last axis (-1) for indexing classes.
         logits_model : must accept list of inputs
