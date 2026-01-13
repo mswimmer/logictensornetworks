@@ -1,7 +1,9 @@
+import argparse
+
 import tensorflow as tf
+import keras
 import numpy as np
 import ltn
-import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -23,9 +25,9 @@ g1 = {l:ltn.Constant(np.random.uniform(low=0.0,high=1.0,size=embedding_size),tra
 g2 = {l:ltn.Constant(np.random.uniform(low=0.0,high=1.0,size=embedding_size),trainable=True) for l in 'ijklmn'}
 g = {**g1,**g2}
 
-Smokes = ltn.Predicate.MLP([embedding_size],hidden_layer_sizes=(16,16))
-Friends = ltn.Predicate.MLP([embedding_size,embedding_size],hidden_layer_sizes=(16,16))
-Cancer = ltn.Predicate.MLP([embedding_size],hidden_layer_sizes=(16,16))
+Smokes = ltn.Predicate.MLP([[embedding_size]],hidden_layer_sizes=(16,16))
+Friends = ltn.Predicate.MLP([[embedding_size],[embedding_size]],hidden_layer_sizes=(16,16))
+Cancer = ltn.Predicate.MLP([[embedding_size]],hidden_layer_sizes=(16,16))
 
 friends = [('a','b'),('a','e'),('a','f'),('a','g'),('b','c'),('c','d'),('e','f'),('g','h'),
            ('i','j'),('j','m'),('k','l'),('m','n')]
@@ -73,11 +75,11 @@ def axioms(p_exists):
     # friendship is anti-reflexive
     axioms.append(Forall(p,Not(Friends([p,p])),p=5))
     # friendship is symmetric
-    axioms.append(Forall((p,q),Implies(Friends([p,q]),Friends([q,p])),p=5))
+    axioms.append(Forall([p,q],Implies(Friends([p,q]),Friends([q,p])),p=5))
     # everyone has a friend
     axioms.append(Forall(p,Exists(q,Friends([p,q]),p=p_exists)))
     # smoking propagates among friends
-    axioms.append(Forall((p,q),Implies(And(Friends([p,q]),Smokes(p)),Smokes(q))))
+    axioms.append(Forall([p,q],Implies(And(Friends([p,q]),Smokes(p)),Smokes(q))))
     # smoking causes cancer + not smoking causes not cancer
     axioms.append(Forall(p,Implies(Smokes(p),Cancer(p))))
     axioms.append(Forall(p,Implies(Not(Smokes(p)),Not(Cancer(p)))))
@@ -89,16 +91,16 @@ def axioms(p_exists):
 print("Initial sat level %.5f"%axioms(p_exists=tf.constant(6.)))
 
 # # Training
-# 
+#
 # Define the metrics
 
 metrics_dict = {
-    'train_sat': tf.keras.metrics.Mean(name='train_sat'),
-    'test_phi1': tf.keras.metrics.Mean(name='test_phi1'),
-    'test_phi2': tf.keras.metrics.Mean(name='test_phi2')
+    'train_sat': keras.metrics.Mean(name='train_sat'),
+    'test_phi1': keras.metrics.Mean(name='test_phi1'),
+    'test_phi2': keras.metrics.Mean(name='test_phi2')
 }
 
-optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+optimizer = keras.optimizers.Adam(learning_rate=0.001)
 trainable_variables = \
         Smokes.trainable_variables \
         + Friends.trainable_variables \
@@ -125,7 +127,7 @@ def sat_phi1():
 def sat_phi2():
     p = ltn.Variable.from_constants("p",list(g.values()))
     q = ltn.Variable.from_constants("q",list(g.values()))
-    phi2 = Forall((p,q), Implies(Or(Cancer(p),Cancer(q)),Friends([p,q])),p=5)
+    phi2 = Forall([p,q], Implies(Or(Cancer(p),Cancer(q)),Friends([p,q])),p=5)
     return phi2.tensor
 
 @tf.function
@@ -146,7 +148,7 @@ if csv_path is not None:
 
 for epoch in range(EPOCHS):
     for metrics in metrics_dict.values():
-        metrics.reset_states()
+        metrics.reset_state()
 
     if 0 <= epoch < 200:
         p_exists = tf.constant(1.)

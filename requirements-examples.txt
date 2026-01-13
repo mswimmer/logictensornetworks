@@ -1,3 +1,6 @@
 matplotlib
 networkx
 pandas
+# pygraphviz --install-option="--include-path=$(brew --prefix graphviz)/include/" --install-option="--library-path=$(brew --prefix graphviz)/lib/"
+seaborn
+scikit-learn

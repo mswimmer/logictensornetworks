@@ -1,8 +1,8 @@
-import tensorflow as tf
-import numpy as np
-import matplotlib.pyplot as plt
-import ltn
 import argparse
+import tensorflow as tf
+import keras
+import numpy as np
+import ltn
 
 def parse_args():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -31,10 +31,10 @@ ds_test = tf.data.Dataset.from_tensor_slices((data[50:],labels[50:])).batch(batc
 
 # # LTN
 
-A = ltn.Predicate.MLP([2],hidden_layer_sizes=(16,16))
+A = ltn.Predicate.MLP([[2]],hidden_layer_sizes=(16,16))
 
 # # Axioms
-# 
+#
 # ```
 # forall x_A: A(x_A)
 # forall x_not_A: ~A(x_not_A)
@@ -68,17 +68,17 @@ for _data, _labels in ds_test:
     break
 
 # # Training
-# 
+#
 # Define the metrics
 
 metrics_dict = {
-    'train_sat': tf.keras.metrics.Mean(name='train_sat'),
-    'test_sat': tf.keras.metrics.Mean(name='test_sat'),
-    'train_accuracy': tf.keras.metrics.BinaryAccuracy(name="train_accuracy",threshold=0.5),
-    'test_accuracy': tf.keras.metrics.BinaryAccuracy(name="test_accuracy",threshold=0.5)
+    'train_sat': keras.metrics.Mean(name='train_sat'),
+    'test_sat': keras.metrics.Mean(name='test_sat'),
+    'train_accuracy': keras.metrics.BinaryAccuracy(name="train_accuracy",threshold=0.5),
+    'test_accuracy': keras.metrics.BinaryAccuracy(name="test_accuracy",threshold=0.5)
 }
 
-optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)
+optimizer = keras.optimizers.Adam(learning_rate=0.001)
 @tf.function
 def train_step(data, labels):
     # sat and update

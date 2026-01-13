@@ -1,7 +1,8 @@
 import tensorflow as tf
-from tensorflow.keras import layers
+import keras
+from keras import layers
 
-class MNISTConv(tf.keras.Model):
+class MNISTConv(keras.Model):
     """CNN that returns linear embeddings for MNIST images.
     """
     def __init__(self, hidden_conv_filters=(6,16), kernel_sizes=(5,5), hidden_dense_sizes=(100,)):
@@ -11,7 +12,7 @@ class MNISTConv(tf.keras.Model):
         self.maxpool = layers.MaxPool2D((2,2))
         self.flatten = layers.Flatten()
         self.denses = [layers.Dense(s, activation="elu") for s in hidden_dense_sizes]
-        
+
     def call(self, x):
         for conv in self.convs:
             x = conv(x)
@@ -19,12 +20,12 @@ class MNISTConv(tf.keras.Model):
         x = self.flatten(x)
         for dense in self.denses:
             x = dense(x)
-        return x        
+        return x
 
-class SingleDigit(tf.keras.Model):
-    """Model classifying one digit image into 10 possible classes. 
+class SingleDigit(keras.Model):
+    """Model classifying one digit image into 10 possible classes.
     """
-    def __init__(self, hidden_dense_sizes=(84,), inputs_as_a_list = False):
+    def __init__(self, hidden_dense_sizes=[84,], inputs_as_a_list = False):
         super(SingleDigit, self).__init__()
         self.mnistconv = MNISTConv()
         self.denses = [layers.Dense(s, activation="elu") for s in hidden_dense_sizes]
@@ -39,7 +40,7 @@ class SingleDigit(tf.keras.Model):
         x = self.dense_class(x)
         return x
 
-class MultiDigits(tf.keras.Model):
+class MultiDigits(keras.Model):
     """Model classifying several digit images into n possible classes.
     """
     def __init__(self,n_classes,hidden_dense_sizes=(84,)):

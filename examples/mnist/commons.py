@@ -2,10 +2,10 @@ from collections import defaultdict
 
 def train(
         epochs,
-        metrics_dict, 
-        ds_train, 
-        ds_test, 
-        train_step, 
+        metrics_dict,
+        ds_train,
+        ds_test,
+        train_step,
         test_step,
         csv_path=None,
         scheduled_parameters=defaultdict(lambda : {})
@@ -33,10 +33,10 @@ def train(
         headers = ",".join(["Epoch"]+list(metrics_dict.keys()))
         csv_template = ",".join(["{}" for _ in range(len(metrics_dict)+1)])
         csv_file.write(headers+"\n")
-    
+
     for epoch in range(epochs):
         for metrics in metrics_dict.values():
-            metrics.reset_states()
+            metrics.reset_state()
 
         for batch_elements in ds_train:
             train_step(*batch_elements,**scheduled_parameters[epoch])

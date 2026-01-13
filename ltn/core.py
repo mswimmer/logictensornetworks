@@ -266,7 +266,7 @@ class Predicate(_Model):
     @classmethod
     def MLP(cls,
             input_shapes,
-            hidden_layer_sizes=(16,16)) -> Predicate:
+            hidden_layer_sizes=[16,16]) -> Predicate:
         inputs = [keras.Input(shape) for shape in input_shapes]
         flat_inputs = [layers.Flatten()(x) for x in inputs]
         hidden = layers.Concatenate()(flat_inputs) if len(flat_inputs) > 1 else flat_inputs[0]
